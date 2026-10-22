@@ -1,0 +1,938 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Simulador Interactivo de Kanban</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Chart.js para visualización de métricas comparativas -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+    }
+    .card-drag {
+      cursor: grab;
+    }
+    .card-drag:active {
+      cursor: grabbing;
+    }
+    .ghost {
+      opacity: 0.4;
+      border: 2px dashed #9ca3af;
+    }
+    /* Estilos de barra de progreso personalizada */
+    .progress-bar {
+      transition: width 0.3s ease-in-out;
+    }
+  </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col">
+
+  <!-- Encabezado de la Aplicación -->
+  <header class="bg-slate-800 border-b border-slate-700 px-6 py-4 flex flex-wrap items-center justify-between gap-4 sticky top-0 z-30 shadow-lg">
+    <div class="flex items-center space-x-3">
+      <div class="p-2 bg-indigo-600 rounded-lg text-white">
+        <i data-lucide="layout-dashboard" class="w-6 h-6"></i>
+      </div>
+      <div>
+        <h1 class="text-xl font-bold text-white leading-tight">Simulador Didáctico de Kanban</h1>
+        <p class="text-xs text-slate-400">Aprende el valor del límite WIP y la gestión del flujo</p>
+      </div>
+    </div>
+
+    <!-- Navegación de Pasos / Rondas -->
+    <div class="flex items-center space-x-2 bg-slate-900 p-1.5 rounded-xl border border-slate-700 text-sm">
+      <button id="btn-tab-ronda1" onclick="switchTab('ronda1')" class="px-3 py-1.5 rounded-lg font-medium transition flex items-center space-x-2 bg-indigo-600 text-white shadow">
+        <i data-lucide="zap" class="w-4 h-4"></i>
+        <span>Ronda 1: Sin Límites</span>
+      </button>
+      <button id="btn-tab-ronda2" onclick="switchTab('ronda2')" class="px-3 py-1.5 rounded-lg font-medium transition flex items-center space-x-2 text-slate-400 hover:text-slate-200">
+        <i data-lucide="shield-check" class="w-4 h-4"></i>
+        <span>Ronda 2: Con Kanban</span>
+      </button>
+      <button id="btn-tab-comparacion" onclick="switchTab('comparacion')" class="px-3 py-1.5 rounded-lg font-medium transition flex items-center space-x-2 text-slate-400 hover:text-slate-200">
+        <i data-lucide="bar-chart-3" class="w-4 h-4"></i>
+        <span>Resultados</span>
+      </button>
+      <button id="btn-tab-quiz" onclick="switchTab('quiz')" class="px-3 py-1.5 rounded-lg font-medium transition flex items-center space-x-2 text-slate-400 hover:text-slate-200">
+        <i data-lucide="help-circle" class="w-4 h-4"></i>
+        <span>Reflexión & Quiz</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Contenido Principal -->
+  <main class="flex-1 p-6 max-w-7xl w-full mx-auto flex flex-col gap-6">
+
+    <!-- BANNER INSTRUCTIVO DINÁMICO -->
+    <div id="instruction-banner" class="bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border-l-4 border-amber-500 p-4 rounded-r-xl flex items-start justify-between gap-4">
+      <div class="flex items-start space-x-3">
+        <i data-lucide="alert-triangle" class="w-5 h-5 text-amber-500 shrink-0 mt-0.5"></i>
+        <div>
+          <h3 id="banner-title" class="font-semibold text-amber-400 text-sm">Ronda 1: Caos Tradicional (Sin límite WIP)</h3>
+          <p id="banner-text" class="text-xs text-slate-300 mt-1">
+            En esta ronda intenta pasar todas las tareas posibles a "En Progreso" al mismo tiempo. Observa cómo el multitarea satura al equipo, genera bloqueos y ralentiza el tiempo de entrega total.
+          </p>
+        </div>
+      </div>
+      <button onclick="toggleInstructionsModal()" class="text-xs text-slate-400 underline hover:text-slate-200 shrink-0">
+        ¿Cómo jugar?
+      </button>
+    </div>
+
+    <!-- PANEL DE MÉTRICAS EN TIEMPO REAL Y CONTROLES -->
+    <div id="metrics-panel" class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
+      <!-- Tiempo Transcurrido -->
+      <div class="bg-slate-800 p-3 rounded-xl border border-slate-700 flex flex-col justify-between">
+        <span class="text-xs text-slate-400 flex items-center gap-1">
+          <i data-lucide="clock" class="w-3.5 h-3.5 text-indigo-400"></i> Tiempo
+        </span>
+        <span id="metric-timer" class="text-xl font-bold text-slate-100 font-mono mt-1">00:00</span>
+      </div>
+
+      <!-- Tareas Completadas -->
+      <div class="bg-slate-800 p-3 rounded-xl border border-slate-700 flex flex-col justify-between">
+        <span class="text-xs text-slate-400 flex items-center gap-1">
+          <i data-lucide="check-circle-2" class="w-3.5 h-3.5 text-emerald-400"></i> Completadas
+        </span>
+        <div class="flex items-baseline space-x-1 mt-1">
+          <span id="metric-completed" class="text-xl font-bold text-emerald-400">0</span>
+          <span class="text-xs text-slate-500">/ 8</span>
+        </div>
+      </div>
+
+      <!-- Límite WIP -->
+      <div class="bg-slate-800 p-3 rounded-xl border border-slate-700 flex flex-col justify-between">
+        <span class="text-xs text-slate-400 flex items-center gap-1">
+          <i data-lucide="sliders" class="w-3.5 h-3.5 text-blue-400"></i> Límite WIP
+        </span>
+        <span id="metric-wip-limit" class="text-xl font-bold text-blue-400 mt-1">Sin Límite</span>
+      </div>
+
+      <!-- Nivel de Estrés / Multitarea -->
+      <div class="bg-slate-800 p-3 rounded-xl border border-slate-700 flex flex-col justify-between">
+        <span class="text-xs text-slate-400 flex items-center gap-1">
+          <i data-lucide="activity" class="w-3.5 h-3.5 text-rose-400"></i> Sobrecarga
+        </span>
+        <div class="mt-1 flex items-center gap-2">
+          <div class="flex-1 bg-slate-700 h-2.5 rounded-full overflow-hidden">
+            <div id="metric-stress-bar" class="bg-emerald-500 h-full progress-bar" style="width: 0%"></div>
+          </div>
+          <span id="metric-stress-value" class="text-xs font-bold text-slate-300">0%</span>
+        </div>
+      </div>
+
+      <!-- Tiempo Promedio de Ciclo -->
+      <div class="bg-slate-800 p-3 rounded-xl border border-slate-700 flex flex-col justify-between">
+        <span class="text-xs text-slate-400 flex items-center gap-1">
+          <i data-lucide="timer" class="w-3.5 h-3.5 text-amber-400"></i> Ciclo Prom.
+        </span>
+        <span id="metric-avg-cycle" class="text-xl font-bold text-amber-400 mt-1 font-mono">0s</span>
+      </div>
+
+      <!-- Botones de Control -->
+      <div class="bg-slate-800 p-2 rounded-xl border border-slate-700 flex items-center gap-2">
+        <button id="btn-start-sim" onclick="startSimulation()" class="flex-1 h-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-lg text-xs flex flex-col items-center justify-center p-1 transition shadow">
+          <i data-lucide="play" class="w-4 h-4 mb-0.5"></i>
+          <span>Iniciar</span>
+        </button>
+        <button onclick="resetCurrentRound()" class="h-full px-3 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-xs flex flex-col items-center justify-center transition">
+          <i data-lucide="rotate-ccw" class="w-4 h-4 mb-0.5"></i>
+          <span>Reiniciar</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- SECCIÓN VISTA DE TABLERO KANBAN (Rondas 1 y 2) -->
+    <div id="section-kanban-board" class="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4 min-h-[480px]">
+
+      <!-- COLUMNA 1: POR HACER -->
+      <div class="bg-slate-800/60 border border-slate-700/80 rounded-2xl flex flex-col overflow-hidden shadow-inner">
+        <div class="p-4 border-b border-slate-700 flex items-center justify-between bg-slate-800">
+          <div class="flex items-center space-x-2">
+            <span class="w-3 h-3 rounded-full bg-slate-400"></span>
+            <h2 class="font-bold text-slate-200">Por Hacer</h2>
+          </div>
+          <span id="badge-todo-count" class="bg-slate-700 text-slate-300 text-xs px-2.5 py-0.5 rounded-full font-semibold">8</span>
+        </div>
+        <div id="col-todo" class="p-3 flex-1 overflow-y-auto flex flex-col gap-3 min-h-[150px]" ondragover="allowDrop(event)" ondrop="drop(event, 'todo')">
+          <!-- Tarjetas dinámicas aquí -->
+        </div>
+      </div>
+
+      <!-- COLUMNA 2: EN PROGRESO (WIP) -->
+      <div id="col-in-progress-container" class="bg-slate-800/60 border border-slate-700/80 rounded-2xl flex flex-col overflow-hidden shadow-inner relative">
+        <div class="p-4 border-b border-slate-700 flex items-center justify-between bg-slate-800">
+          <div class="flex items-center space-x-2">
+            <span class="w-3 h-3 rounded-full bg-blue-500 animate-pulse"></span>
+            <h2 class="font-bold text-slate-200">En Progreso</h2>
+          </div>
+          <div class="flex items-center space-x-1.5 text-xs">
+            <span id="badge-wip-count" class="font-bold text-blue-400">0</span>
+            <span id="badge-wip-max" class="text-slate-500">/ ∞</span>
+          </div>
+        </div>
+
+        <!-- Alerta visual de Violación de Límite WIP -->
+        <div id="wip-warning" class="hidden bg-rose-500/20 border-b border-rose-500/50 px-4 py-2 text-rose-300 text-xs flex items-center justify-between">
+          <span class="flex items-center gap-1.5">
+            <i data-lucide="shield-alert" class="w-4 h-4 text-rose-400"></i>
+            ¡Límite WIP alcanzado! Bloquea nuevas tareas.
+          </span>
+        </div>
+
+        <div id="col-doing" class="p-3 flex-1 overflow-y-auto flex flex-col gap-3 min-h-[150px]" ondragover="allowDrop(event)" ondrop="drop(event, 'doing')">
+          <!-- Tarjetas dinámicas aquí -->
+        </div>
+      </div>
+
+      <!-- COLUMNA 3: HECHO -->
+      <div class="bg-slate-800/60 border border-slate-700/80 rounded-2xl flex flex-col overflow-hidden shadow-inner">
+        <div class="p-4 border-b border-slate-700 flex items-center justify-between bg-slate-800">
+          <div class="flex items-center space-x-2">
+            <span class="w-3 h-3 rounded-full bg-emerald-500"></span>
+            <h2 class="font-bold text-slate-200">Hecho</h2>
+          </div>
+          <span id="badge-done-count" class="bg-slate-700 text-slate-300 text-xs px-2.5 py-0.5 rounded-full font-semibold">0</span>
+        </div>
+        <div id="col-done" class="p-3 flex-1 overflow-y-auto flex flex-col gap-3 min-h-[150px]" ondragover="allowDrop(event)" ondrop="drop(event, 'done')">
+          <!-- Tarjetas dinámicas aquí -->
+        </div>
+      </div>
+
+    </div>
+
+    <!-- SECCIÓN COMPARACIÓN DE RESULTADOS (Oculta por defecto) -->
+    <div id="section-comparison" class="hidden flex-1 flex-col gap-6">
+      <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 shadow-xl">
+        <div class="flex items-center justify-between mb-6">
+          <div>
+            <h2 class="text-xl font-bold text-white">Análisis Comparativo de Rondas</h2>
+            <p class="text-xs text-slate-400">Impacto directo de limitar el Trabajo en Progreso (WIP)</p>
+          </div>
+          <button onclick="switchTab('quiz')" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs px-4 py-2 rounded-lg font-medium transition flex items-center gap-2">
+            <span>Ir a Preguntas de Reflexión</span>
+            <i data-lucide="arrow-right" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <!-- Tarjetas de Resumen Numérico -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+          <div class="bg-slate-900/80 p-4 rounded-xl border border-slate-700/60">
+            <span class="text-xs text-slate-400">Tiempo Total de Entrega</span>
+            <div class="mt-2 flex items-baseline justify-between">
+              <div>
+                <p class="text-2xl font-bold text-amber-400" id="cmp-time-r1">--:--</p>
+                <span class="text-[10px] text-slate-500">Ronda 1 (Sin Límites)</span>
+              </div>
+              <div class="text-right">
+                <p class="text-2xl font-bold text-emerald-400" id="cmp-time-r2">--:--</p>
+                <span class="text-[10px] text-slate-500">Ronda 2 (Con Kanban)</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="bg-slate-900/80 p-4 rounded-xl border border-slate-700/60">
+            <span class="text-xs text-slate-400">Tiempo de Ciclo Promedio</span>
+            <div class="mt-2 flex items-baseline justify-between">
+              <div>
+                <p class="text-2xl font-bold text-amber-400" id="cmp-cycle-r1">0s</p>
+                <span class="text-[10px] text-slate-500">Ronda 1</span>
+              </div>
+              <div class="text-right">
+                <p class="text-2xl font-bold text-emerald-400" id="cmp-cycle-r2">0s</p>
+                <span class="text-[10px] text-slate-500">Ronda 2</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="bg-slate-900/80 p-4 rounded-xl border border-slate-700/60">
+            <span class="text-xs text-slate-400">Nivel Máximo de Sobrecarga</span>
+            <div class="mt-2 flex items-baseline justify-between">
+              <div>
+                <p class="text-2xl font-bold text-rose-400" id="cmp-stress-r1">0%</p>
+                <span class="text-[10px] text-slate-500">Ronda 1</span>
+              </div>
+              <div class="text-right">
+                <p class="text-2xl font-bold text-emerald-400" id="cmp-stress-r2">0%</p>
+                <span class="text-[10px] text-slate-500">Ronda 2</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Gráficos Comparativos -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div class="bg-slate-900 p-4 rounded-xl border border-slate-700">
+            <h3 class="text-sm font-semibold text-slate-300 mb-4 text-center">Tiempo de Ciclo por Tarea (Segundos)</h3>
+            <div class="h-64 relative">
+              <canvas id="chart-cycle-time"></canvas>
+            </div>
+          </div>
+          <div class="bg-slate-900 p-4 rounded-xl border border-slate-700">
+            <h3 class="text-sm font-semibold text-slate-300 mb-4 text-center">Nivel de Eficiencia y Sobrecarga</h3>
+            <div class="h-64 relative">
+              <canvas id="chart-metrics-bar"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SECCIÓN DE REFLEXIÓN Y QUIZ (Oculta por defecto) -->
+    <div id="section-quiz" class="hidden flex-1 flex-col gap-6 max-w-3xl mx-auto w-full">
+      <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 shadow-xl">
+        <div class="flex items-center space-x-3 mb-4">
+          <div class="p-2 bg-indigo-500/20 text-indigo-400 rounded-lg">
+            <i data-lucide="brain" class="w-6 h-6"></i>
+          </div>
+          <div>
+            <h2 class="text-xl font-bold text-white">Reflexión Práctica de Kanban</h2>
+            <p class="text-xs text-slate-400">Comprueba lo aprendido resolviendo estas preguntas de afianzamiento</p>
+          </div>
+        </div>
+
+        <div id="quiz-container" class="space-y-6 mt-6">
+          <!-- Pregunta 1 -->
+          <div class="bg-slate-900/60 p-5 rounded-xl border border-slate-700 space-y-3">
+            <h3 class="font-semibold text-sm text-slate-200">1. ¿Qué sucedió cuando acumulas muchas tareas al mismo tiempo en la columna "En Progreso"?</h3>
+            <div class="space-y-2 text-xs">
+              <label class="flex items-center p-3 rounded-lg border border-slate-700 bg-slate-800/40 hover:bg-slate-800 cursor-pointer transition">
+                <input type="radio" name="q1" value="a" class="text-indigo-600 focus:ring-0 mr-3">
+                <span>Las tareas se completaron mucho más rápido gracias al trabajo simultáneo.</span>
+              </label>
+              <label class="flex items-center p-3 rounded-lg border border-slate-700 bg-slate-800/40 hover:bg-slate-800 cursor-pointer transition">
+                <input type="radio" name="q1" value="b" class="text-indigo-600 focus:ring-0 mr-3">
+                <span>El equipo sufrió sobrecarga (multitarea), se crearon cuellos de botella y el tiempo por tarea aumentó.</span>
+              </label>
+              <label class="flex items-center p-3 rounded-lg border border-slate-700 bg-slate-800/40 hover:bg-slate-800 cursor-pointer transition">
+                <input type="radio" name="q1" value="c" class="text-indigo-600 focus:ring-0 mr-3">
+                <span>No hubo ningún cambio significativo en el rendimiento del equipo.</span>
+              </label>
+            </div>
+            <div id="q1-feedback" class="hidden text-xs p-3 rounded-lg font-medium"></div>
+          </div>
+
+          <!-- Pregunta 2 -->
+          <div class="bg-slate-900/60 p-5 rounded-xl border border-slate-700 space-y-3">
+            <h3 class="font-semibold text-sm text-slate-200">2. ¿Cuál es el objetivo principal de aplicar un límite de Trabajo en Progreso (WIP Limit)?</h3>
+            <div class="space-y-2 text-xs">
+              <label class="flex items-center p-3 rounded-lg border border-slate-700 bg-slate-800/40 hover:bg-slate-800 cursor-pointer transition">
+                <input type="radio" name="q2" value="a" class="text-indigo-600 focus:ring-0 mr-3">
+                <span>Restringir a los trabajadores para que trabajen menos horas.</span>
+              </label>
+              <label class="flex items-center p-3 rounded-lg border border-slate-700 bg-slate-800/40 hover:bg-slate-800 cursor-pointer transition">
+                <input type="radio" name="q2" value="b" class="text-indigo-600 focus:ring-0 mr-3">
+                <span>Optimizar el flujo de trabajo, reducir la multitarea y finalizar las tareas activas antes de empezar nuevas ("Stop Starting, Start Finishing").</span>
+              </label>
+              <label class="flex items-center p-3 rounded-lg border border-slate-700 bg-slate-800/40 hover:bg-slate-800 cursor-pointer transition">
+                <input type="radio" name="q2" value="c" class="text-indigo-600 focus:ring-0 mr-3">
+                <span>Aumentar la cantidad de proyectos que se abren simultáneamente.</span>
+              </label>
+            </div>
+            <div id="q2-feedback" class="hidden text-xs p-3 rounded-lg font-medium"></div>
+          </div>
+
+          <!-- Pregunta 3 -->
+          <div class="bg-slate-900/60 p-5 rounded-xl border border-slate-700 space-y-3">
+            <h3 class="font-semibold text-sm text-slate-200">3. En Kanban, ¿qué diferencia existe entre el "Lead Time" y el "Cycle Time"?</h3>
+            <div class="space-y-2 text-xs">
+              <label class="flex items-center p-3 rounded-lg border border-slate-700 bg-slate-800/40 hover:bg-slate-800 cursor-pointer transition">
+                <input type="radio" name="q3" value="a" class="text-indigo-600 focus:ring-0 mr-3">
+                <span>Lead Time es desde que se solicita la tarea hasta que se entrega; Cycle Time es el tiempo que se trabaja activamente en ella.</span>
+              </label>
+              <label class="flex items-center p-3 rounded-lg border border-slate-700 bg-slate-800/40 hover:bg-slate-800 cursor-pointer transition">
+                <input type="radio" name="q3" value="b" class="text-indigo-600 focus:ring-0 mr-3">
+                <span>Son exactamente el mismo concepto con diferente nombre.</span>
+              </label>
+              <label class="flex items-center p-3 rounded-lg border border-slate-700 bg-slate-800/40 hover:bg-slate-800 cursor-pointer transition">
+                <input type="radio" name="q3" value="c" class="text-indigo-600 focus:ring-0 mr-3">
+                <span>Cycle Time mide el estrés y Lead Time mide la velocidad del reloj.</span>
+              </label>
+            </div>
+            <div id="q3-feedback" class="hidden text-xs p-3 rounded-lg font-medium"></div>
+          </div>
+
+          <button onclick="evaluateQuiz()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-3 rounded-xl transition shadow">
+            Verificar Respuestas
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- MODAL DE INSTRUCCIONES / AYUDA -->
+  <div id="modal-instructions" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-slate-800 border border-slate-700 rounded-2xl max-w-lg w-full p-6 shadow-2xl relative">
+      <button onclick="toggleInstructionsModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+
+      <div class="flex items-center space-x-3 mb-4">
+        <div class="p-2 bg-indigo-600 text-white rounded-lg">
+          <i data-lucide="book-open" class="w-5 h-5"></i>
+        </div>
+        <h3 class="text-lg font-bold text-white">Instrucciones de la Simulación</h3>
+      </div>
+
+      <div class="space-y-3 text-xs text-slate-300 leading-relaxed">
+        <p><strong>Objetivo:</strong> Completar las 8 tareas del backlog pasando cada una de "Por Hacer" &rarr; "En Progreso" &rarr; "Hecho".</p>
+
+        <p><strong>Mecánica de Procesamiento de Tareas:</strong></p>
+        <ul class="list-disc pl-5 space-y-1 text-slate-400">
+          <li>Arrastra o usa los botones de las tarjetas para moverlas.</li>
+          <li>Cada tarjeta en <em>"En Progreso"</em> requiere un trabajo de simulación (debes presionar el botón <strong>"Trabajar"</strong> en la tarjeta varias veces para avanzar su barra).</li>
+        </ul>
+
+        <div class="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg text-amber-300">
+          <strong>Efecto de Multitarea (Ronda 1):</strong> Al tener muchas tareas en progreso, ¡las tarjetas requerirán el doble de clics para avanzar y el nivel de sobrecarga aumentará!
+        </div>
+
+        <div class="p-3 bg-indigo-500/10 border border-indigo-500/30 rounded-lg text-indigo-300">
+          <strong>Límite WIP (Ronda 2):</strong> El tablero no te permitirá ingresar más de 2 tareas en progreso. Esto forzará al equipo a concentrarse y terminar lo pendiente primero.
+        </div>
+      </div>
+
+      <button onclick="toggleInstructionsModal()" class="mt-6 w-full bg-slate-700 hover:bg-slate-600 text-white font-medium py-2 rounded-lg text-xs transition">
+        Entendido, volver al simulador
+      </button>
+    </div>
+  </div>
+
+  <!-- LÓGICA EN JAVASCRIPT -->
+  <script>
+    // DATA INICIAL DE TAREAS SIMULADAS
+    const INITIAL_TASKS = [
+      { id: 't1', title: 'Diseñar Mockup de Inicio', tag: 'Diseño', clicksRequired: 4 },
+      { id: 't2', title: 'Corregir Bug de Autenticación', tag: 'Dev', clicksRequired: 5 },
+      { id: 't3', title: 'Escribir Artículo de Blog', tag: 'Contenido', clicksRequired: 3 },
+      { id: 't4', title: 'Aprobar Presupuesto Anual', tag: 'Gestión', clicksRequired: 4 },
+      { id: 't5', title: 'Optimizar Base de Datos', tag: 'Dev', clicksRequired: 6 },
+      { id: 't6', title: 'Diseñar Banners de Redes', tag: 'Diseño', clicksRequired: 3 },
+      { id: 't7', title: 'Configurar Servidor CI/CD', tag: 'DevOps', clicksRequired: 5 },
+      { id: 't8', title: 'Revisar Feedback de Cliente', tag: 'Soporte', clicksRequired: 4 }
+    ];
+
+    // ESTADO GLOBAL
+    let currentRound = 1; // 1: Sin Límites, 2: Con Kanban
+    let isRunning = false;
+    let timerInterval = null;
+    let secondsElapsed = 0;
+
+    // Estado por ronda
+    let roundData = {
+      1: { tasks: [], wipLimit: null, totalTime: 0, avgCycleTime: 0, maxStress: 0, completedCount: 0, cycleTimes: [] },
+      2: { tasks: [], wipLimit: 2, totalTime: 0, avgCycleTime: 0, maxStress: 0, completedCount: 0, cycleTimes: [] }
+    };
+
+    // Referencias a gráficos Chart.js
+    let chartCycleInstance = null;
+    let chartMetricsInstance = null;
+
+    // INICIALIZACIÓN
+    window.onload = function() {
+      lucide.createIcons();
+      initRound(1);
+      initRound(2);
+      renderBoard();
+    };
+
+    function initRound(roundNum) {
+      roundData[roundNum].tasks = INITIAL_TASKS.map(task => ({
+        ...task,
+        status: 'todo', // 'todo', 'doing', 'done'
+        clicksDone: 0,
+        startTime: null,
+        endTime: null,
+        cycleTime: 0
+      }));
+    }
+
+    // CAMBIO DE PESTAÑAS
+    function switchTab(tab) {
+      // Ocultar todas las secciones
+      document.getElementById('section-kanban-board').classList.add('hidden');
+      document.getElementById('section-comparison').classList.add('hidden');
+      document.getElementById('section-quiz').classList.add('hidden');
+      document.getElementById('metrics-panel').classList.add('hidden');
+      document.getElementById('instruction-banner').classList.add('hidden');
+
+      // Restablecer estilos de botones
+      ['ronda1', 'ronda2', 'comparacion', 'quiz'].forEach(t => {
+        const btn = document.getElementById(`btn-tab-${t}`);
+        if (btn) {
+          btn.className = "px-3 py-1.5 rounded-lg font-medium transition flex items-center space-x-2 text-slate-400 hover:text-slate-200";
+        }
+      });
+
+      const activeBtn = document.getElementById(`btn-tab-${tab}`);
+      if (activeBtn) {
+        activeBtn.className = "px-3 py-1.5 rounded-lg font-medium transition flex items-center space-x-2 bg-indigo-600 text-white shadow";
+      }
+
+      if (tab === 'ronda1') {
+        currentRound = 1;
+        document.getElementById('section-kanban-board').classList.remove('hidden');
+        document.getElementById('section-kanban-board').classList.add('grid');
+        document.getElementById('metrics-panel').classList.remove('hidden');
+        document.getElementById('metrics-panel').classList.add('grid');
+        document.getElementById('instruction-banner').classList.remove('hidden');
+        updateBanner(1);
+        renderBoard();
+        updateMetricsUI();
+      } else if (tab === 'ronda2') {
+        currentRound = 2;
+        document.getElementById('section-kanban-board').classList.remove('hidden');
+        document.getElementById('section-kanban-board').classList.add('grid');
+        document.getElementById('metrics-panel').classList.remove('hidden');
+        document.getElementById('metrics-panel').classList.add('grid');
+        document.getElementById('instruction-banner').classList.remove('hidden');
+        updateBanner(2);
+        renderBoard();
+        updateMetricsUI();
+      } else if (tab === 'comparacion') {
+        document.getElementById('section-comparison').classList.remove('hidden');
+        document.getElementById('section-comparison').classList.add('flex');
+        renderComparisonCharts();
+      } else if (tab === 'quiz') {
+        document.getElementById('section-quiz').classList.remove('hidden');
+        document.getElementById('section-quiz').classList.add('flex');
+      }
+    }
+
+    function updateBanner(round) {
+      const title = document.getElementById('banner-title');
+      const text = document.getElementById('banner-text');
+      if (round === 1) {
+        title.innerText = "Ronda 1: Caos Tradicional (Sin límite WIP)";
+        text.innerText = "En esta ronda puedes mover tantas tareas como quieras a 'En Progreso'. Observa cómo el multitarea satura al equipo, exige más esfuerzo por tarea y aumenta la sobrecarga.";
+      } else {
+        title.innerText = "Ronda 2: Flujo Kanban (Límite WIP = 2)";
+        text.innerText = "En esta ronda se aplica un límite de máximo 2 tareas en 'En Progreso'. No podrás iniciar una tarea nueva hasta finalizar una actual. ¡Siente la fluidez del trabajo!";
+      }
+    }
+
+    // CONTROL DEL TEMPORIZADOR
+    function startSimulation() {
+      if (isRunning) return;
+      isRunning = true;
+
+      const btnStart = document.getElementById('btn-start-sim');
+      btnStart.classList.remove('bg-emerald-600', 'hover:bg-emerald-500');
+      btnStart.classList.add('bg-slate-700', 'cursor-not-allowed');
+      btnStart.disabled = true;
+
+      timerInterval = setInterval(() => {
+        secondsElapsed++;
+        updateMetricsUI();
+      }, 1000);
+    }
+
+    function stopSimulation() {
+      isRunning = false;
+      clearInterval(timerInterval);
+      const btnStart = document.getElementById('btn-start-sim');
+      btnStart.classList.remove('bg-slate-700', 'cursor-not-allowed');
+      btnStart.classList.add('bg-emerald-600', 'hover:bg-emerald-500');
+      btnStart.disabled = false;
+    }
+
+    function resetCurrentRound() {
+      stopSimulation();
+      secondsElapsed = 0;
+      initRound(currentRound);
+      roundData[currentRound].totalTime = 0;
+      roundData[currentRound].avgCycleTime = 0;
+      roundData[currentRound].maxStress = 0;
+      roundData[currentRound].completedCount = 0;
+      renderBoard();
+      updateMetricsUI();
+    }
+
+    // RENDERIZADO DEL TABLERO
+    function renderBoard() {
+      const tasks = roundData[currentRound].tasks;
+
+      const colTodo = document.getElementById('col-todo');
+      const colDoing = document.getElementById('col-doing');
+      const colDone = document.getElementById('col-done');
+
+      colTodo.innerHTML = '';
+      colDoing.innerHTML = '';
+      colDone.innerHTML = '';
+
+      let todoCount = 0;
+      let doingCount = 0;
+      let doneCount = 0;
+
+      tasks.forEach(task => {
+        const cardHtml = createCardHTML(task);
+        if (task.status === 'todo') {
+          colTodo.innerHTML += cardHtml;
+          todoCount++;
+        } else if (task.status === 'doing') {
+          colDoing.innerHTML += cardHtml;
+          doingCount++;
+        } else if (task.status === 'done') {
+          colDone.innerHTML += cardHtml;
+          doneCount++;
+        }
+      });
+
+      // Actualizar Badges
+      document.getElementById('badge-todo-count').innerText = todoCount;
+      document.getElementById('badge-wip-count').innerText = doingCount;
+      document.getElementById('badge-done-count').innerText = doneCount;
+
+      const wipLimit = roundData[currentRound].wipLimit;
+      document.getElementById('badge-wip-max').innerText = wipLimit ? `/ ${wipLimit}` : '/ ∞';
+
+      // Alerta WIP
+      const warningElem = document.getElementById('wip-warning');
+      if (wipLimit && doingCount >= wipLimit) {
+        warningElem.classList.remove('hidden');
+      } else {
+        warningElem.classList.add('hidden');
+      }
+
+      lucide.createIcons();
+    }
+
+    function createCardHTML(task) {
+      const isDoing = task.status === 'doing';
+      const isDone = task.status === 'done';
+
+      // Cálculo de Penalización por Multitarea en Ronda 1
+      const doingTasksCount = roundData[currentRound].tasks.filter(t => t.status === 'doing').length;
+      let extraClicks = 0;
+
+      if (currentRound === 1 && doingTasksCount > 2) {
+        // En ronda 1, si hay más de 2 tareas en progreso, cada tarea extra añade dificultad
+        extraClicks = (doingTasksCount - 2) * 2;
+      }
+
+      const totalClicksNeeded = task.clicksRequired + extraClicks;
+      const progressPercent = Math.min(100, Math.round((task.clicksDone / totalClicksNeeded) * 100));
+
+      return `
+        <div id="card-${task.id}" 
+             draggable="true" 
+             ondragstart="drag(event, '${task.id}')"
+             class="bg-slate-800 p-3 rounded-xl border ${isDoing ? 'border-indigo-500 shadow-md shadow-indigo-500/10' : 'border-slate-700'} hover:border-slate-500 transition card-drag flex flex-col gap-2">
+          
+          <div class="flex items-center justify-between">
+            <span class="text-[10px] font-semibold uppercase px-2 py-0.5 rounded bg-slate-700 text-slate-300">${task.tag}</span>
+            ${task.cycleTime ? `<span class="text-[10px] text-amber-400 font-mono">${task.cycleTime}s</span>` : ''}
+          </div>
+
+          <h4 class="text-xs font-semibold text-slate-100">${task.title}</h4>
+
+          ${isDoing ? `
+            <div class="space-y-1.5 mt-1">
+              <div class="flex justify-between items-center text-[10px] text-slate-400">
+                <span>Avance (${task.clicksDone}/${totalClicksNeeded})</span>
+                ${extraClicks > 0 ? `<span class="text-rose-400 font-semibold">+${extraClicks} fricción</span>` : ''}
+              </div>
+              <div class="w-full bg-slate-700 h-2 rounded-full overflow-hidden">
+                <div class="bg-indigo-500 h-full progress-bar" style="width: ${progressPercent}%"></div>
+              </div>
+              <button onclick="workOnTask('${task.id}')" class="w-full mt-1 bg-indigo-600 hover:bg-indigo-500 text-white text-xs py-1.5 rounded-lg font-medium transition active:scale-95 flex items-center justify-center gap-1">
+                <i data-lucide="hammer" class="w-3 h-3"></i>
+                <span>Trabajar en tarea</span>
+              </button>
+            </div>
+          ` : ''}
+
+          <div class="flex items-center justify-between pt-2 border-t border-slate-700/50 mt-1">
+            ${task.status === 'todo' ? `
+              <button onclick="moveTask('${task.id}', 'doing')" class="text-[11px] text-indigo-400 hover:text-indigo-300 flex items-center gap-1 font-medium">
+                <span>Avanzar a Progreso</span>
+                <i data-lucide="arrow-right" class="w-3 h-3"></i>
+              </button>
+            ` : ''}
+
+            ${task.status === 'doing' && progressPercent >= 100 ? `
+              <button onclick="moveTask('${task.id}', 'done')" class="w-full text-[11px] bg-emerald-600 hover:bg-emerald-500 text-white py-1 rounded-lg font-medium flex items-center justify-center gap-1">
+                <i data-lucide="check" class="w-3 h-3"></i>
+                <span>Mover a Hecho</span>
+              </button>
+            ` : ''}
+
+            ${isDone ? `
+              <span class="text-[10px] text-emerald-400 flex items-center gap-1">
+                <i data-lucide="check-circle" class="w-3 h-3"></i> Tarea Finalizada
+              </span>
+            ` : ''}
+          </div>
+        </div>
+      `;
+    }
+
+    // ACCIÓN DE TRABAJAR EN TAREA
+    function workOnTask(taskId) {
+      if (!isRunning) startSimulation();
+
+      const task = roundData[currentRound].tasks.find(t => t.id === taskId);
+      if (!task || task.status !== 'doing') return;
+
+      task.clicksDone++;
+      renderBoard();
+      updateMetricsUI();
+    }
+
+    // MOVER TAREAS ENTRE COLUMNAS
+    function moveTask(taskId, targetStatus) {
+      if (!isRunning && targetStatus === 'doing') startSimulation();
+
+      const task = roundData[currentRound].tasks.find(t => t.id === taskId);
+      if (!task) return;
+
+      // Verificar Límite WIP al mover a 'doing'
+      if (targetStatus === 'doing') {
+        const wipLimit = roundData[currentRound].wipLimit;
+        const currentDoing = roundData[currentRound].tasks.filter(t => t.status === 'doing').length;
+
+        if (wipLimit && currentDoing >= wipLimit) {
+          alert(`¡Atención! No puedes añadir más de ${wipLimit} tareas a "En Progreso" en esta ronda. Primero debes terminar una de las tareas activas.`);
+          return;
+        }
+
+        if (!task.startTime) {
+          task.startTime = secondsElapsed;
+        }
+      }
+
+      if (targetStatus === 'done') {
+        task.endTime = secondsElapsed;
+        task.cycleTime = task.endTime - (task.startTime || task.endTime);
+        roundData[currentRound].cycleTimes.push(task.cycleTime);
+      }
+
+      task.status = targetStatus;
+      renderBoard();
+      updateMetricsUI();
+      checkRoundCompletion();
+    }
+
+    // DRAG AND DROP
+    function allowDrop(ev) {
+      ev.preventDefault();
+    }
+
+    function drag(ev, taskId) {
+      ev.dataTransfer.setData("text", taskId);
+    }
+
+    function drop(ev, targetStatus) {
+      ev.preventDefault();
+      const taskId = ev.dataTransfer.getData("text");
+      moveTask(taskId, targetStatus);
+    }
+
+    // ACTUALIZACIÓN DE MÉTRICAS EN TIEMPO REAL
+    function updateMetricsUI() {
+      // Temporizador
+      const mins = Math.floor(secondsElapsed / 60).toString().padStart(2, '0');
+      const secs = (secondsElapsed % 60).toString().padStart(2, '0');
+      document.getElementById('metric-timer').innerText = `${mins}:${secs}`;
+
+      const tasks = roundData[currentRound].tasks;
+      const completed = tasks.filter(t => t.status === 'done').length;
+      const doing = tasks.filter(t => t.status === 'doing').length;
+
+      document.getElementById('metric-completed').innerText = completed;
+
+      // Límite WIP
+      const limit = roundData[currentRound].wipLimit;
+      document.getElementById('metric-wip-limit').innerText = limit ? `${limit} Tareas` : 'Sin Límite';
+
+      // Nivel de Estrés / Multitarea
+      let stress = 0;
+      if (currentRound === 1) {
+        // En ronda 1 el estrés aumenta con el número de tareas concurrentes
+        stress = Math.min(100, Math.round((doing / 5) * 100));
+      } else {
+        // En ronda 2 el estrés se mantiene muy bajo gracias al WIP
+        stress = Math.min(100, Math.round((doing / 2) * 30));
+      }
+
+      if (stress > roundData[currentRound].maxStress) {
+        roundData[currentRound].maxStress = stress;
+      }
+
+      const stressBar = document.getElementById('metric-stress-bar');
+      const stressVal = document.getElementById('metric-stress-value');
+      stressBar.style.width = `${stress}%`;
+      stressVal.innerText = `${stress}%`;
+
+      if (stress > 60) {
+        stressBar.className = "bg-rose-500 h-full progress-bar";
+      } else if (stress > 30) {
+        stressBar.className = "bg-amber-500 h-full progress-bar";
+      } else {
+        stressBar.className = "bg-emerald-500 h-full progress-bar";
+      }
+
+      // Tiempo Promedio de Ciclo
+      const cycleTimes = roundData[currentRound].cycleTimes;
+      const avgCycle = cycleTimes.length > 0 ? Math.round(cycleTimes.reduce((a, b) => a + b, 0) / cycleTimes.length) : 0;
+      document.getElementById('metric-avg-cycle').innerText = `${avgCycle}s`;
+
+      roundData[currentRound].totalTime = secondsElapsed;
+      roundData[currentRound].avgCycleTime = avgCycle;
+      roundData[currentRound].completedCount = completed;
+    }
+
+    // VERIFICAR FIN DE RONDA
+    function checkRoundCompletion() {
+      const completed = roundData[currentRound].tasks.filter(t => t.status === 'done').length;
+      if (completed === INITIAL_TASKS.length) {
+        stopSimulation();
+        setTimeout(() => {
+          if (currentRound === 1) {
+            alert("¡Felicidades! Has completado la Ronda 1 (Sin Límites). Ahora pasa a la 'Ronda 2: Con Kanban' para notar la diferencia.");
+          } else {
+            alert("¡Excelente trabajo! Has completado la Ronda 2 utilizando la metodología Kanban. Haz clic en 'Resultados' para ver el análisis comparativo.");
+          }
+        }, 300);
+      }
+    }
+
+    // MODAL
+    function toggleInstructionsModal() {
+      const modal = document.getElementById('modal-instructions');
+      modal.classList.toggle('hidden');
+    }
+
+    // RENDERIZAR GRÁFICOS COMPARATIVOS
+    function renderComparisonCharts() {
+      // Actualizar valores del resumen numérico
+      const formatTime = (sec) => {
+        const m = Math.floor(sec / 60).toString().padStart(2, '0');
+        const s = (sec % 60).toString().padStart(2, '0');
+        return `${m}:${s}`;
+      };
+
+      document.getElementById('cmp-time-r1').innerText = formatTime(roundData[1].totalTime);
+      document.getElementById('cmp-time-r2').innerText = formatTime(roundData[2].totalTime);
+
+      document.getElementById('cmp-cycle-r1').innerText = `${roundData[1].avgCycleTime}s`;
+      document.getElementById('cmp-cycle-r2').innerText = `${roundData[2].avgCycleTime}s`;
+
+      document.getElementById('cmp-stress-r1').innerText = `${roundData[1].maxStress}%`;
+      document.getElementById('cmp-stress-r2').innerText = `${roundData[2].maxStress}%`;
+
+      // Destruir gráficos previos si existen
+      if (chartCycleInstance) chartCycleInstance.destroy();
+      if (chartMetricsInstance) chartMetricsInstance.destroy();
+
+      // Chart 1: Tiempo de ciclo por tarea
+      const ctx1 = document.getElementById('chart-cycle-time').getContext('2d');
+      const labels = INITIAL_TASKS.map((_, i) => `Tarea ${i + 1}`);
+      const cycleDataR1 = roundData[1].tasks.map(t => t.cycleTime || 0);
+      const cycleDataR2 = roundData[2].tasks.map(t => t.cycleTime || 0);
+
+      chartCycleInstance = new Chart(ctx1, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: 'Ronda 1 (Sin Límites)',
+              data: cycleDataR1,
+              borderColor: '#f59e0b',
+              backgroundColor: 'rgba(245, 158, 11, 0.1)',
+              tension: 0.3,
+              fill: true
+            },
+            {
+              label: 'Ronda 2 (Con Kanban)',
+              data: cycleDataR2,
+              borderColor: '#10b981',
+              backgroundColor: 'rgba(16, 185, 129, 0.1)',
+              tension: 0.3,
+              fill: true
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { labels: { color: '#94a3b8' } }
+          },
+          scales: {
+            x: { ticks: { color: '#64748b' }, grid: { color: '#334155' } },
+            y: { ticks: { color: '#64748b' }, grid: { color: '#334155' } }
+          }
+        }
+      });
+
+      // Chart 2: Comparativa de Sobrecarga y Tiempo Total
+      const ctx2 = document.getElementById('chart-metrics-bar').getContext('2d');
+      chartMetricsInstance = new Chart(ctx2, {
+        type: 'bar',
+        data: {
+          labels: ['Tiempo Total (s)', 'Ciclo Promedio (s)', 'Máx. Sobrecarga (%)'],
+          datasets: [
+            {
+              label: 'Ronda 1 (Sin Límites)',
+              data: [roundData[1].totalTime, roundData[1].avgCycleTime, roundData[1].maxStress],
+              backgroundColor: '#f59e0b'
+            },
+            {
+              label: 'Ronda 2 (Con Kanban)',
+              data: [roundData[2].totalTime, roundData[2].avgCycleTime, roundData[2].maxStress],
+              backgroundColor: '#10b981'
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { labels: { color: '#94a3b8' } }
+          },
+          scales: {
+            x: { ticks: { color: '#64748b' }, grid: { color: '#334155' } },
+            y: { ticks: { color: '#64748b' }, grid: { color: '#334155' } }
+          }
+        }
+      });
+    }
+
+    // EVALUACIÓN DEL QUIZ
+    function evaluateQuiz() {
+      const answers = { q1: 'b', q2: 'b', q3: 'a' };
+
+      Object.keys(answers).forEach(qKey => {
+        const selected = document.querySelector(`input[name="${qKey}"]:checked`);
+        const feedbackElem = document.getElementById(`${qKey}-feedback`);
+        feedbackElem.classList.remove('hidden', 'bg-emerald-500/20', 'text-emerald-300', 'bg-rose-500/20', 'text-rose-300');
+
+        if (!selected) {
+          feedbackElem.classList.add('bg-rose-500/20', 'text-rose-300');
+          feedbackElem.innerText = 'Por favor selecciona una respuesta.';
+          return;
+        }
+
+        if (selected.value === answers[qKey]) {
+          feedbackElem.classList.add('bg-emerald-500/20', 'text-emerald-300');
+          feedbackElem.innerText = '¡Correcto! Entendiste la idea clave de Kanban.';
+        } else {
+          feedbackElem.classList.add('bg-rose-500/20', 'text-rose-300');
+          feedbackElem.innerText = 'Incorrecto. Revisa los principios del límite WIP y flujo de trabajo.';
+        }
+      });
+    }
+  </script>
+</body>
+</html>
